@@ -94,20 +94,22 @@
 
 **Primary Strategy:** Binance for real-time data (no auth, unlimited), CoinGecko for historical backfill, Alternative.me for Fear & Greed, Reddit for retail sentiment.
 
-### 2.4 Infrastructure & Services
+### 2.4 Infrastructure
 
-| Service | Purpose | Free Tier Limits |
-|---------|---------|-----------------|
-| **Vercel** | Frontend hosting | 100GB bandwidth, 150K invocations, 6K build min/mo |
-| **Oracle Cloud Always-Free** | Backend hosting (ARM VM) | 4 ARM cores, 24GB RAM, 200GB disk, always-on, forever free |
-| **Resend** | Email notifications | 3,000 emails/month (100/day) |
+**Deployment: Local only.** The app runs on your local machine:
+- Frontend: `http://localhost:3000` (Next.js dev server)
+- Backend: `http://localhost:8000` (FastAPI with uvicorn)
+- Database: SQLite file (zero config, no external DB needed)
+- Scheduler: APScheduler runs in-process with the backend
 
-**Why Oracle Cloud over Railway/Render/Fly.io:**
-- **24GB RAM** — enough for PyTorch + FinBERT + XGBoost + Ollama LLM all in memory
-- **Always-on** — APScheduler runs 24/7, no sleep, no cold starts (Railway/Render sleep)
-- **200GB persistent disk** — SQLite, ML artifacts, Ollama models all stored permanently
-- **No credit card** — truly free forever (Railway needs CC after trial, Fly.io free tier gone)
-- **ARM architecture** — Python/Docker work fine on ARM; just use `--platform linux/arm64`
+**Optional services (all free, all optional):**
+
+| Service | Purpose | Free Tier |
+|---------|---------|-----------|
+| **Resend** | Email alerts | 3,000 emails/month |
+| **Reddit API** | Sentiment from r/cryptocurrency | Free developer app |
+| **CoinGecko API** | Higher rate limits for data | Free key available |
+| **Ollama** | Local LLM analysis | Free, runs locally |
 
 ### 2.5 Email Notification Comparison
 
@@ -621,127 +623,54 @@ investor/
 
 ---
 
-## 10. Phase 6: Deployment & Polish (Weeks 11–12)
+## 10. Phase 6: Local Deployment & Polish
 
-### Deployment Architecture
+### Architecture (Local)
 
 ```
-Vercel (Free Hobby)                 Oracle Cloud (Always-Free ARM VM)
-───────────────────                 ─────────────────────────────────
-Next.js 16.2 frontend               FastAPI backend
-- Dashboard, charts                  - 4 ARM cores, 24GB RAM, 200GB disk
-- Auth (better-auth + SQLite)        - PyTorch, XGBoost, FinBERT, pandas-ta
-- API proxy → Oracle backend         - APScheduler (30-min analysis cycles)
-- Static pages + serverless          - SQLite database (persistent)
-                                     - Ollama + Mistral 7B (enough RAM!)
-HTTPS ──────────────────────────►    - Email alerts (Resend)
-  BACKEND_URL env var                - ML model artifacts
-  (server-only, not exposed)         - Docker container (ARM64)
+localhost:3000                    localhost:8000
+─────────────                    ──────────────
+Next.js 16.2 frontend            FastAPI backend
+- Dashboard, charts              - PyTorch, XGBoost, FinBERT, pandas-ta
+- Auth (better-auth + SQLite)    - APScheduler (30-min analysis cycles)
+- API proxy → backend :8000      - SQLite database
+                                 - Ollama LLM (optional)
+                                 - Email alerts via Resend (optional)
 ```
 
-### Week 11: Production Deployment
+### Setup Steps
 
-**Step 1 — Git: commit and push all code**
-- Commit all work to `main` branch
-- Push to GitHub repo (`ISTANBULBEKLE/investor`)
+```bash
+make install         # Install Python + Node dependencies
+make db-migrate      # Create backend database tables
+make auth-migrate    # Create auth database tables
+make start           # Start backend + frontend
+make create-user email=you@email.com password=pass name=Admin
+make train-models    # Train ML models (BTC, ETH, HBAR, IOTA)
+```
 
-**Step 2 — Frontend → Vercel**
-- Install Vercel CLI: `npm i -g vercel`
-- Create `frontend/vercel.json` with build configuration
-- Run `vercel` from frontend directory — auto-detects Next.js
-- Set environment variables in Vercel dashboard:
-  - `BACKEND_URL` = Oracle VM public IP/domain
-  - `BETTER_AUTH_SECRET` = production 32+ char secret
-  - `BETTER_AUTH_URL` = Vercel production URL
-  - `NEXT_PUBLIC_BETTER_AUTH_URL` = Vercel production URL
-- Verify build and deploy succeeds
+### Optional Enhancements
 
-**Step 3 — Oracle Cloud: provision Always-Free ARM VM**
-- Create Oracle Cloud account (no credit card required)
-- Provision Ampere A1 instance: 4 ARM cores, 24GB RAM, 200GB boot volume
-- OS: Oracle Linux 8 or Ubuntu 22.04 (ARM)
-- Open firewall ports: 8000 (backend API), 22 (SSH)
-- Install Docker on the VM
-- Optional: set up a free domain via DuckDNS or use the VM's public IP
+**Ollama LLM (adds narrative analysis):**
+```bash
+brew install ollama
+ollama pull mistral
+ollama serve   # runs on localhost:11434, backend connects automatically
+```
 
-**Step 4 — Backend → Oracle Cloud Docker**
-- Update Dockerfile for ARM64 (`FROM python:3.12-slim` works on ARM)
-- Copy project to VM (git clone or scp)
-- Build Docker image on VM: `docker build -t investor-backend ./backend`
-- Run container: `docker run -d --restart unless-stopped -p 8000:8000 -v /data/investor:/app/data investor-backend`
-- SQLite database stored on mounted volume (`/data/investor/`)
-- ML model artifacts baked into Docker image
+**Resend email alerts:** Sign up at resend.com, add `RESEND_API_KEY` to `backend/.env`
 
-**Step 5 — Ollama on Oracle Cloud (bonus: 24GB RAM)**
-- Install Ollama on Oracle VM: `curl -fsSL https://ollama.com/install.sh | sh`
-- Pull model: `ollama pull mistral` (~4GB, fits easily in 24GB RAM)
-- Ollama runs at `http://localhost:11434` — backend connects automatically
-- LLM analysis now available in production (impossible on Railway/Render)
-
-**Step 6 — Production environment variables**
-- Create `.env` on Oracle VM with production values:
-  - `DATABASE_URL=sqlite+aiosqlite:///./data/investor.db`
-  - `RESEND_API_KEY` = real Resend key (for email alerts)
-  - `ALERT_EMAIL_TO` = your email
-  - `OLLAMA_BASE_URL=http://localhost:11434`
-  - Optional: `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`
-
-**Step 7 — CORS and security**
-- Update CORS in `main.py` to allow Vercel production domain
-- Vercel proxy keeps `BACKEND_URL` server-only (never exposed to browser)
-- Firewall: only ports 8000 + 22 open on Oracle VM
-
-**Step 8 — Seed production user**
-- Start frontend dev locally pointing at Oracle backend
-- Or call sign-up endpoint directly with curl:
-  ```bash
-  curl -X POST https://your-vercel-url.vercel.app/api/auth/sign-up/email \
-    -H "Content-Type: application/json" \
-    -H "Origin: https://your-vercel-url.vercel.app" \
-    -d '{"email":"you@email.com","password":"yourpassword","name":"Admin"}'
-  ```
-
-**Step 9 — Train models on Oracle VM**
-- SSH into VM, run: `OMP_NUM_THREADS=1 python -m scripts.train_models --days 365`
-- 4 ARM cores + 24GB RAM handles full 365-day training easily
-- Models saved to persistent volume
-
-### Week 12: Testing, Monitoring & Polish
-
-**Task 6.5 — End-to-End Verification**
-- Login at Vercel URL → dashboard loads → prices display
-- Signal generation works (TA + ML + sentiment + LLM)
-- Portfolio add/edit/delete works
-- Settings save persists
-- Predictions page shows signal history
-- Check scheduler is running: signals appear every 30 minutes
-
-**Task 6.6 — Monitoring**
-- SSH to Oracle VM: `docker logs investor-backend --tail 100`
-- Health check: `curl http://VM_IP:8000/health`
-- Set up free uptime monitoring (UptimeRobot free tier: 50 monitors)
-
-**Task 6.7 — Security Hardening**
-- CORS allows only Vercel production domain
-- Oracle Cloud firewall: restrict port 8000 to Vercel IP ranges (or keep open)
-- `BACKEND_URL` is server-only in Vercel (not in `NEXT_PUBLIC_*`)
-- All secrets in environment variables, never in code
-
-**Task 6.8 — Performance**
-- Analysis cycle completes within 2 minutes (24GB RAM makes this fast)
-- Lazy-load ML models on first request
-- Frontend: dynamic imports for charts (already done)
-- React Query caching reduces redundant API calls
+**Reddit sentiment:** Create app at reddit.com/prefs/apps, add credentials to `backend/.env`
 
 ### Phase 6 Definition of Done
-- [ ] Frontend accessible at Vercel URL with working auth
-- [ ] Backend running on Oracle Cloud ARM VM (Docker, always-on)
-- [ ] Ollama + Mistral 7B running on same VM (LLM analysis live)
-- [ ] APScheduler generating signals every 30 minutes
-- [ ] Email alerts configured and sending via Resend
-- [ ] ML models trained on 365 days of data (4 symbols)
-- [ ] Health endpoint reports all systems operational
-- [ ] Total cost: $0
+- [ ] `make start` launches both services cleanly
+- [ ] Login works at http://localhost:3000
+- [ ] Dashboard shows live prices for BTC, ETH, HBAR, IOTA
+- [ ] Signal generation works (TA + ML + sentiment)
+- [ ] Portfolio add/edit/delete works
+- [ ] APScheduler generates signals every 30 minutes
+- [ ] ML models trained for all 4 symbols
+- [ ] 49 backend tests passing
 
 ---
 
@@ -841,19 +770,16 @@ When RSI, MACD, and Bollinger Bands all align, backtested strategies show a **77
 
 ## 13. Cost Analysis
 
-### Year 1 Costs (All Free Tiers)
+### Costs
 
-| Component | Cost | Service |
-|-----------|------|---------|
-| Frontend hosting | $0 | Vercel Hobby (100GB bandwidth, 150K invocations) |
-| Backend hosting | $0 | Oracle Cloud Always-Free (4 ARM cores, 24GB RAM, 200GB) |
-| Database | $0 | SQLite on Oracle persistent disk |
-| LLM inference | $0 | Ollama + Mistral 7B on Oracle VM (24GB RAM) |
-| Crypto data | $0 | Binance + CoinGecko free |
-| Sentiment data | $0 | Reddit + Alternative.me free |
-| Email alerts | $0 | Resend 3K/month free |
-| ML libraries | $0 | All open source |
-| **Total** | **$0** | **Custom domain optional: ~$12/year** |
+| Component | Cost | Notes |
+|-----------|------|-------|
+| All software | $0 | Open source (Python, Next.js, PyTorch, etc.) |
+| Crypto data | $0 | Binance + CoinGecko free APIs |
+| Sentiment data | $0 | Alternative.me Fear & Greed (free, no key) |
+| LLM inference | $0 | Ollama runs locally (optional) |
+| Email alerts | $0 | Resend 3K/month free (optional) |
+| **Total** | **$0** | **Runs entirely on your local machine** |
 
 ---
 
@@ -861,13 +787,11 @@ When RSI, MACD, and Bollinger Bands all align, backtested strategies show a **77
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| Binance API rate limits | Data fetching fails | Aggressive caching, CCXT as fallback exchange |
+| Binance API rate limits | Data fetching fails | Aggressive caching (30s TTL), CCXT as fallback |
 | CoinGecko 30/min limit | Backfill is slow | Batch requests, backfill once then incremental |
-| Oracle VM reclaimed (rare) | Backend offline | Oracle rarely reclaims Always-Free; keep VM active. Backup: export Docker image |
-| Vercel 150K invocations | Frontend API routes exhausted | React Query caching (staleTime), reduce polling |
-| Oracle ARM compatibility | Some packages fail on ARM | Python/PyTorch/XGBoost all support ARM64 natively |
+| Machine asleep/off | Scheduler stops | Signals only generate while `make start` is running |
 | False signals | Financial loss | Disclaimers, confidence scores, never auto-trade, track accuracy |
-| Model degradation over time | Accuracy drops | Weekly retraining on Oracle VM (cron job), monitor rolling accuracy |
+| Model degradation over time | Accuracy drops | Periodic retraining via `make train-models` |
 
 ---
 
@@ -885,7 +809,7 @@ When RSI, MACD, and Bollinger Bands all align, backtested strategies show a **77
 | 8 | Notifications | Email alerts via Resend, Redis caching |
 | 9 | Dashboard | TradingView charts, signal cards, metrics |
 | 10 | Dashboard | Portfolio tracker, predictions history, WebSocket |
-| 11 | Deployment | Vercel + Oracle Cloud deployment, production config |
+| 11 | Local Deploy | Setup scripts, make start/stop, ML training |
 | 12 | Polish | Testing, monitoring, documentation, security |
 
 ---
@@ -918,6 +842,6 @@ NEXT_PUBLIC_BETTER_AUTH_URL=http://localhost:3000
 
 ---
 
-*Document Version: 2.0 — April 8, 2026*
-*Updated: Deployment strategy revised to Vercel (frontend) + Oracle Cloud Always-Free (backend).*
+*Document Version: 3.0 — April 8, 2026*
+*Updated: Local-only deployment. No cloud services required.*
 *Generated with extensive research across crypto APIs, ML frameworks, and deployment platforms.*

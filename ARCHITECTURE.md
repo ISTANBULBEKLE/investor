@@ -9,7 +9,7 @@
 | **3: AI & Sentiment** | COMPLETE | FinBERT + Reddit + Fear & Greed + Ollama LLM |
 | **4: Signal Engine** | COMPLETE | Ensemble weighting + APScheduler (30-min) + Resend email alerts |
 | **5: Dashboard** | COMPLETE | TradingView charts + portfolio + predictions + settings |
-| **6: Deployment** | IN PROGRESS | Vercel (frontend) + Oracle Cloud Always-Free ARM VM (backend) |
+| **6: Local Deploy** | COMPLETE | Local-only: `make start` runs both services on localhost |
 
 **Overall: ~85% complete** — fully functional locally, deployment config remaining.
 
