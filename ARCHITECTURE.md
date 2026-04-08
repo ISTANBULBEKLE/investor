@@ -9,7 +9,7 @@
 | **3: AI & Sentiment** | COMPLETE | FinBERT + Reddit + Fear & Greed + Ollama LLM |
 | **4: Signal Engine** | COMPLETE | Ensemble weighting + APScheduler (30-min) + Resend email alerts |
 | **5: Dashboard** | COMPLETE | TradingView charts + portfolio + predictions + settings |
-| **6: Deployment** | PARTIAL | Dockerfile exists; Vercel/Railway config + production DB still needed |
+| **6: Deployment** | IN PROGRESS | Vercel (frontend) + Oracle Cloud Always-Free ARM VM (backend) |
 
 **Overall: ~85% complete** — fully functional locally, deployment config remaining.
 

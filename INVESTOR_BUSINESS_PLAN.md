@@ -99,14 +99,15 @@
 | Service | Purpose | Free Tier Limits |
 |---------|---------|-----------------|
 | **Vercel** | Frontend hosting | 100GB bandwidth, 150K invocations, 6K build min/mo |
-| **Railway** | Backend hosting | $5 credit/mo, 512MB RAM, 500 hrs/mo |
-| **Neon PostgreSQL** | Database (production) | 0.5GB storage, 10 branches |
-| **Upstash Redis** | Caching, rate limiting | 10K commands/day |
+| **Oracle Cloud Always-Free** | Backend hosting (ARM VM) | 4 ARM cores, 24GB RAM, 200GB disk, always-on, forever free |
 | **Resend** | Email notifications | 3,000 emails/month (100/day) |
 
-**Alternative Backend Hosts:**
-- **Render:** Persistent free tier, 15-min sleep after inactivity (30-60s cold starts)
-- **Fly.io:** 3 VMs at 256MB always-on (no cold starts) — best for scheduled analysis
+**Why Oracle Cloud over Railway/Render/Fly.io:**
+- **24GB RAM** — enough for PyTorch + FinBERT + XGBoost + Ollama LLM all in memory
+- **Always-on** — APScheduler runs 24/7, no sleep, no cold starts (Railway/Render sleep)
+- **200GB persistent disk** — SQLite, ML artifacts, Ollama models all stored permanently
+- **No credit card** — truly free forever (Railway needs CC after trial, Fly.io free tier gone)
+- **ARM architecture** — Python/Docker work fine on ARM; just use `--platform linux/arm64`
 
 ### 2.5 Email Notification Comparison
 
@@ -157,7 +158,7 @@
     └─────────┘  └─────────┘  └───────────┘
 ```
 
-**API Communication Pattern:** The Next.js frontend proxies all API requests through its own API routes (`/api/proxy/[...path]`). This avoids CORS issues and keeps the backend URL private. In production, Vercel server-side fetch calls the Railway backend URL stored in an environment variable.
+**API Communication Pattern:** The Next.js frontend proxies all API requests through its own API routes (`/api/proxy/[...path]`). This avoids CORS issues and keeps the backend URL private. In production, Vercel server-side fetch calls the Oracle Cloud backend URL stored in a server-only environment variable.
 
 **Configurable Crypto Selection:** The system defaults to BTC, ETH, HBAR, and IOTA but the user can configure 2–10 cryptocurrencies in `UserSettings`. Every service accepts symbol parameters rather than hardcoding tickers. A mapping config translates symbols to API-specific identifiers:
 
@@ -622,63 +623,125 @@ investor/
 
 ## 10. Phase 6: Deployment & Polish (Weeks 11–12)
 
+### Deployment Architecture
+
+```
+Vercel (Free Hobby)                 Oracle Cloud (Always-Free ARM VM)
+───────────────────                 ─────────────────────────────────
+Next.js 16.2 frontend               FastAPI backend
+- Dashboard, charts                  - 4 ARM cores, 24GB RAM, 200GB disk
+- Auth (better-auth + SQLite)        - PyTorch, XGBoost, FinBERT, pandas-ta
+- API proxy → Oracle backend         - APScheduler (30-min analysis cycles)
+- Static pages + serverless          - SQLite database (persistent)
+                                     - Ollama + Mistral 7B (enough RAM!)
+HTTPS ──────────────────────────►    - Email alerts (Resend)
+  BACKEND_URL env var                - ML model artifacts
+  (server-only, not exposed)         - Docker container (ARM64)
+```
+
 ### Week 11: Production Deployment
 
-**Task 6.1 — Frontend → Vercel**
-- Connect GitHub repo, configure environment variables in Vercel dashboard
-- `BACKEND_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `NEXT_PUBLIC_BETTER_AUTH_URL`
-- Verify Turbopack build succeeds
+**Step 1 — Git: commit and push all code**
+- Commit all work to `main` branch
+- Push to GitHub repo (`ISTANBULBEKLE/investor`)
 
-**Task 6.2 — Backend → Railway**
-- Dockerfile: Python 3.12-slim, install requirements, uvicorn entry
-- **Ollama in production**: Cannot run on Railway free tier (insufficient RAM)
-  - **Option A (recommended)**: Skip LLM in production — TA + ML + sentiment still robust (3 sources)
-  - **Option B**: Use Groq free API (30 RPM) as cloud LLM fallback
-  - **Option C**: Run Ollama on a home server, expose via Cloudflare Tunnel
-- ML model artifacts included in Docker image
-- APScheduler runs in-process (no separate worker needed at this scale)
+**Step 2 — Frontend → Vercel**
+- Install Vercel CLI: `npm i -g vercel`
+- Create `frontend/vercel.json` with build configuration
+- Run `vercel` from frontend directory — auto-detects Next.js
+- Set environment variables in Vercel dashboard:
+  - `BACKEND_URL` = Oracle VM public IP/domain
+  - `BETTER_AUTH_SECRET` = production 32+ char secret
+  - `BETTER_AUTH_URL` = Vercel production URL
+  - `NEXT_PUBLIC_BETTER_AUTH_URL` = Vercel production URL
+- Verify build and deploy succeeds
 
-**Task 6.3 — Database Decision**
-- **Option A (simpler)**: SQLite on Railway persistent volume
-- **Option B (scalable)**: Neon PostgreSQL — update driver to asyncpg
-- Recommendation: Start with SQLite, migrate if needed
+**Step 3 — Oracle Cloud: provision Always-Free ARM VM**
+- Create Oracle Cloud account (no credit card required)
+- Provision Ampere A1 instance: 4 ARM cores, 24GB RAM, 200GB boot volume
+- OS: Oracle Linux 8 or Ubuntu 22.04 (ARM)
+- Open firewall ports: 8000 (backend API), 22 (SSH)
+- Install Docker on the VM
+- Optional: set up a free domain via DuckDNS or use the VM's public IP
 
-**Task 6.4 — Redis Production**
-- Create Upstash Redis instance, set `REDIS_URL` in Railway environment
+**Step 4 — Backend → Oracle Cloud Docker**
+- Update Dockerfile for ARM64 (`FROM python:3.12-slim` works on ARM)
+- Copy project to VM (git clone or scp)
+- Build Docker image on VM: `docker build -t investor-backend ./backend`
+- Run container: `docker run -d --restart unless-stopped -p 8000:8000 -v /data/investor:/app/data investor-backend`
+- SQLite database stored on mounted volume (`/data/investor/`)
+- ML model artifacts baked into Docker image
 
-### Week 12: Testing, Monitoring & Documentation
+**Step 5 — Ollama on Oracle Cloud (bonus: 24GB RAM)**
+- Install Ollama on Oracle VM: `curl -fsSL https://ollama.com/install.sh | sh`
+- Pull model: `ollama pull mistral` (~4GB, fits easily in 24GB RAM)
+- Ollama runs at `http://localhost:11434` — backend connects automatically
+- LLM analysis now available in production (impossible on Railway/Render)
 
-**Task 6.5 — End-to-End Tests**
-- Playwright: login → dashboard → signal display → crypto switch
-- Backend integration: trigger analysis cycle → verify signal stored → verify alerts
+**Step 6 — Production environment variables**
+- Create `.env` on Oracle VM with production values:
+  - `DATABASE_URL=sqlite+aiosqlite:///./data/investor.db`
+  - `RESEND_API_KEY` = real Resend key (for email alerts)
+  - `ALERT_EMAIL_TO` = your email
+  - `OLLAMA_BASE_URL=http://localhost:11434`
+  - Optional: `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`
+
+**Step 7 — CORS and security**
+- Update CORS in `main.py` to allow Vercel production domain
+- Vercel proxy keeps `BACKEND_URL` server-only (never exposed to browser)
+- Firewall: only ports 8000 + 22 open on Oracle VM
+
+**Step 8 — Seed production user**
+- Start frontend dev locally pointing at Oracle backend
+- Or call sign-up endpoint directly with curl:
+  ```bash
+  curl -X POST https://your-vercel-url.vercel.app/api/auth/sign-up/email \
+    -H "Content-Type: application/json" \
+    -H "Origin: https://your-vercel-url.vercel.app" \
+    -d '{"email":"you@email.com","password":"yourpassword","name":"Admin"}'
+  ```
+
+**Step 9 — Train models on Oracle VM**
+- SSH into VM, run: `OMP_NUM_THREADS=1 python -m scripts.train_models --days 365`
+- 4 ARM cores + 24GB RAM handles full 365-day training easily
+- Models saved to persistent volume
+
+### Week 12: Testing, Monitoring & Polish
+
+**Task 6.5 — End-to-End Verification**
+- Login at Vercel URL → dashboard loads → prices display
+- Signal generation works (TA + ML + sentiment + LLM)
+- Portfolio add/edit/delete works
+- Settings save persists
+- Predictions page shows signal history
+- Check scheduler is running: signals appear every 30 minutes
 
 **Task 6.6 — Monitoring**
-- Global exception handler with proper error responses
-- Structured JSON logging with request ID tracing
-- Enhanced health check: DB connectivity, Binance reachability, last analysis timestamp
-- Railway/Render built-in logs (free monitoring)
+- SSH to Oracle VM: `docker logs investor-backend --tail 100`
+- Health check: `curl http://VM_IP:8000/health`
+- Set up free uptime monitoring (UptimeRobot free tier: 50 monitors)
 
 **Task 6.7 — Security Hardening**
-- CORS allows frontend origin only
-- API key auth between frontend and backend (shared secret in header)
-- `BACKEND_URL` is server-only (not exposed to client)
-- No secrets in code — all in environment variables
+- CORS allows only Vercel production domain
+- Oracle Cloud firewall: restrict port 8000 to Vercel IP ranges (or keep open)
+- `BACKEND_URL` is server-only in Vercel (not in `NEXT_PUBLIC_*`)
+- All secrets in environment variables, never in code
 
-**Task 6.8 — Performance Optimization**
-- Analysis cycle completes within 2 minutes
-- Lazy-load ML models (don't block startup)
-- DB connection pooling
-- Frontend: lazy-load chart components, verify Core Web Vitals
+**Task 6.8 — Performance**
+- Analysis cycle completes within 2 minutes (24GB RAM makes this fast)
+- Lazy-load ML models on first request
+- Frontend: dynamic imports for charts (already done)
+- React Query caching reduces redundant API calls
 
 ### Phase 6 Definition of Done
-- [ ] Frontend accessible at Vercel URL with auth
-- [ ] Backend running on Railway, accessible only to frontend
-- [ ] Scheduled analysis running every 30 minutes in production
-- [ ] Email alerts sent for signal changes
+- [ ] Frontend accessible at Vercel URL with working auth
+- [ ] Backend running on Oracle Cloud ARM VM (Docker, always-on)
+- [ ] Ollama + Mistral 7B running on same VM (LLM analysis live)
+- [ ] APScheduler generating signals every 30 minutes
+- [ ] Email alerts configured and sending via Resend
+- [ ] ML models trained on 365 days of data (4 symbols)
 - [ ] Health endpoint reports all systems operational
-- [ ] README provides complete setup instructions
-- [ ] 3+ E2E tests passing
-- [ ] Lighthouse score > 80
+- [ ] Total cost: $0
 
 ---
 
@@ -782,13 +845,12 @@ When RSI, MACD, and Bollinger Bands all align, backtested strategies show a **77
 
 | Component | Cost | Service |
 |-----------|------|---------|
-| Frontend hosting | $0 | Vercel Hobby |
-| Backend hosting | $0 | Railway ($5/mo credit) or Render free |
-| Database | $0 | SQLite or Neon free |
-| Redis cache | $0 | Upstash free |
+| Frontend hosting | $0 | Vercel Hobby (100GB bandwidth, 150K invocations) |
+| Backend hosting | $0 | Oracle Cloud Always-Free (4 ARM cores, 24GB RAM, 200GB) |
+| Database | $0 | SQLite on Oracle persistent disk |
+| LLM inference | $0 | Ollama + Mistral 7B on Oracle VM (24GB RAM) |
 | Crypto data | $0 | Binance + CoinGecko free |
 | Sentiment data | $0 | Reddit + Alternative.me free |
-| LLM inference | $0 | Ollama local (or skip in production) |
 | Email alerts | $0 | Resend 3K/month free |
 | ML libraries | $0 | All open source |
 | **Total** | **$0** | **Custom domain optional: ~$12/year** |
@@ -801,12 +863,11 @@ When RSI, MACD, and Bollinger Bands all align, backtested strategies show a **77
 |------|--------|------------|
 | Binance API rate limits | Data fetching fails | Aggressive caching, CCXT as fallback exchange |
 | CoinGecko 30/min limit | Backfill is slow | Batch requests, backfill once then incremental |
-| Railway $5 credit exhausted | Backend offline | Monitor usage, optimize Docker, fallback to Render |
+| Oracle VM reclaimed (rare) | Backend offline | Oracle rarely reclaims Always-Free; keep VM active. Backup: export Docker image |
 | Vercel 150K invocations | Frontend API routes exhausted | React Query caching (staleTime), reduce polling |
-| Ollama unavailable in prod | No LLM analysis | System works without LLM, add Groq API fallback |
-| FinBERT model size (~400MB) | Railway container size | Persistent volume, not rebuilt each deploy |
+| Oracle ARM compatibility | Some packages fail on ARM | Python/PyTorch/XGBoost all support ARM64 natively |
 | False signals | Financial loss | Disclaimers, confidence scores, never auto-trade, track accuracy |
-| Model degradation over time | Accuracy drops | Weekly retraining, monitor rolling accuracy |
+| Model degradation over time | Accuracy drops | Weekly retraining on Oracle VM (cron job), monitor rolling accuracy |
 
 ---
 
@@ -824,7 +885,7 @@ When RSI, MACD, and Bollinger Bands all align, backtested strategies show a **77
 | 8 | Notifications | Email alerts via Resend, Redis caching |
 | 9 | Dashboard | TradingView charts, signal cards, metrics |
 | 10 | Dashboard | Portfolio tracker, predictions history, WebSocket |
-| 11 | Deployment | Vercel + Railway deployment, production config |
+| 11 | Deployment | Vercel + Oracle Cloud deployment, production config |
 | 12 | Polish | Testing, monitoring, documentation, security |
 
 ---
@@ -857,5 +918,6 @@ NEXT_PUBLIC_BETTER_AUTH_URL=http://localhost:3000
 
 ---
 
-*Document Version: 1.0 — April 7, 2026*
+*Document Version: 2.0 — April 8, 2026*
+*Updated: Deployment strategy revised to Vercel (frontend) + Oracle Cloud Always-Free (backend).*
 *Generated with extensive research across crypto APIs, ML frameworks, and deployment platforms.*

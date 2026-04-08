@@ -2,8 +2,11 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    # Database
+    # Database (use /app/data/ in Docker for persistent volume)
     database_url: str = "sqlite+aiosqlite:///./investor.db"
+
+    # CORS: comma-separated allowed origins
+    cors_origins: str = "http://localhost:3000"
 
     # Binance
     binance_base_url: str = "https://api.binance.com/api/v3"
