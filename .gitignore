@@ -1,0 +1,61 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Next.js
+.next/
+out/
+
+# Environment
+.env
+.env.local
+.env.production.local
+.env.development.local
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# ML model artifacts
+backend/app/models/artifacts/*.joblib
+backend/app/models/artifacts/*.pt
+backend/app/models/artifacts/*.pkl
+!backend/app/models/artifacts/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+
+# Vercel
+.vercel
+
+# PID files
+.backend.pid
+.frontend.pid
+
+# Misc
+*.log

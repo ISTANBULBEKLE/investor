@@ -1,0 +1,136 @@
+SYMBOL_CONFIG: dict[str, dict[str, str | list[str]]] = {
+    "BTC": {
+        "binance": "BTCUSDT",
+        "coingecko": "bitcoin",
+        "name": "Bitcoin",
+        "subreddits": ["bitcoin", "cryptocurrency"],
+    },
+    "ETH": {
+        "binance": "ETHUSDT",
+        "coingecko": "ethereum",
+        "name": "Ethereum",
+        "subreddits": ["ethereum", "cryptocurrency"],
+    },
+    "SOL": {
+        "binance": "SOLUSDT",
+        "coingecko": "solana",
+        "name": "Solana",
+        "subreddits": ["solana", "cryptocurrency"],
+    },
+    "BNB": {
+        "binance": "BNBUSDT",
+        "coingecko": "binancecoin",
+        "name": "BNB",
+        "subreddits": ["binance", "cryptocurrency"],
+    },
+    "XRP": {
+        "binance": "XRPUSDT",
+        "coingecko": "ripple",
+        "name": "XRP",
+        "subreddits": ["ripple", "cryptocurrency"],
+    },
+    "ADA": {
+        "binance": "ADAUSDT",
+        "coingecko": "cardano",
+        "name": "Cardano",
+        "subreddits": ["cardano", "cryptocurrency"],
+    },
+    "DOGE": {
+        "binance": "DOGEUSDT",
+        "coingecko": "dogecoin",
+        "name": "Dogecoin",
+        "subreddits": ["dogecoin", "cryptocurrency"],
+    },
+    "DOT": {
+        "binance": "DOTUSDT",
+        "coingecko": "polkadot",
+        "name": "Polkadot",
+        "subreddits": ["polkadot", "cryptocurrency"],
+    },
+    "AVAX": {
+        "binance": "AVAXUSDT",
+        "coingecko": "avalanche-2",
+        "name": "Avalanche",
+        "subreddits": ["avax", "cryptocurrency"],
+    },
+    "LINK": {
+        "binance": "LINKUSDT",
+        "coingecko": "chainlink",
+        "name": "Chainlink",
+        "subreddits": ["chainlink", "cryptocurrency"],
+    },
+    "MATIC": {
+        "binance": "MATICUSDT",
+        "coingecko": "matic-network",
+        "name": "Polygon",
+        "subreddits": ["maticnetwork", "cryptocurrency"],
+    },
+    "UNI": {
+        "binance": "UNIUSDT",
+        "coingecko": "uniswap",
+        "name": "Uniswap",
+        "subreddits": ["uniswap", "cryptocurrency"],
+    },
+    "ATOM": {
+        "binance": "ATOMUSDT",
+        "coingecko": "cosmos",
+        "name": "Cosmos",
+        "subreddits": ["cosmosnetwork", "cryptocurrency"],
+    },
+    "LTC": {
+        "binance": "LTCUSDT",
+        "coingecko": "litecoin",
+        "name": "Litecoin",
+        "subreddits": ["litecoin", "cryptocurrency"],
+    },
+    "ARB": {
+        "binance": "ARBUSDT",
+        "coingecko": "arbitrum",
+        "name": "Arbitrum",
+        "subreddits": ["arbitrum", "cryptocurrency"],
+    },
+    "OP": {
+        "binance": "OPUSDT",
+        "coingecko": "optimism",
+        "name": "Optimism",
+        "subreddits": ["optimismCollective", "cryptocurrency"],
+    },
+    "SUI": {
+        "binance": "SUIUSDT",
+        "coingecko": "sui",
+        "name": "Sui",
+        "subreddits": ["sui", "cryptocurrency"],
+    },
+    "APT": {
+        "binance": "APTUSDT",
+        "coingecko": "aptos",
+        "name": "Aptos",
+        "subreddits": ["aptosnetwork", "cryptocurrency"],
+    },
+    "NEAR": {
+        "binance": "NEARUSDT",
+        "coingecko": "near",
+        "name": "NEAR Protocol",
+        "subreddits": ["nearprotocol", "cryptocurrency"],
+    },
+    "FIL": {
+        "binance": "FILUSDT",
+        "coingecko": "filecoin",
+        "name": "Filecoin",
+        "subreddits": ["filecoin", "cryptocurrency"],
+    },
+    "HBAR": {
+        "binance": "HBARUSDT",
+        "coingecko": "hedera-hashgraph",
+        "name": "Hedera",
+        "subreddits": ["hedera", "cryptocurrency"],
+    },
+    "IOTA": {
+        "binance": "IOTAUSDT",
+        "coingecko": "iota",
+        "name": "IOTA",
+        "subreddits": ["iota", "cryptocurrency"],
+    },
+}
+
+SUPPORTED_SYMBOLS = list(SYMBOL_CONFIG.keys())
